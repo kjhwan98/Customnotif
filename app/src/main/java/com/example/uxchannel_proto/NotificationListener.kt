@@ -200,7 +200,7 @@ class NotificationListener : NotificationListenerService() {
         val notification: Notification = NotificationCompat.Builder(this, notificationChannelId)
             .setContentTitle("Notification Stats Service")
             .setContentText("Collecting notification stats")
-            .setSmallIcon(R.drawable.khu)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

@@ -22,6 +22,9 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class KeywordActivity : AppCompatActivity() {
     private lateinit var keywordListView: ListView
@@ -35,9 +38,7 @@ class KeywordActivity : AppCompatActivity() {
         setContentView(R.layout.activity_keyword)
 
         deviceIdTextView = findViewById(R.id.tvDeviceId)
-        realtimeDatabase = FirebaseDatabase.getInstance().apply {
-            setPersistenceEnabled(true) // 오프라인 시 데이터 로컬 저장 활성화
-        }
+        realtimeDatabase = FirebaseDatabase.getInstance()
         // Retrieve the device ID from shared preferences and display it
         val sharedPreferences = getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         deviceId = sharedPreferences.getString("deviceId", null) ?: "UnknownDeviceId"
@@ -138,15 +139,14 @@ class KeywordActivity : AppCompatActivity() {
     }
 
     private fun saveKeywordsToFirebase(keyword: String) {
-        val keywordRef = realtimeDatabase.reference.child("users")
-            .child(deviceId)
-            .child("keywords")
+        val addedAt = getCurrentFormattedTimestamp()
+        val keywordRef = realtimeDatabase.reference.child("keyword")
             .push()
 
         val keywordData = mapOf(
             "deviceId" to deviceId, // deviceId 추가
             "keyword" to keyword,
-            "addedAt" to System.currentTimeMillis(), // 추가 시간
+            "addedAt" to addedAt, // 추가 시간
             "deletedAt" to null // 삭제 시간은 없음(null)
         )
 
@@ -158,16 +158,15 @@ class KeywordActivity : AppCompatActivity() {
     }
 
     private fun removeKeywordFromFirebase(keyword: String) {
-        val keywordRef = realtimeDatabase.reference.child("users")
-            .child(deviceId)
-            .child("keywords")
+        val deletedAt = getCurrentFormattedTimestamp()
+        val keywordRef = realtimeDatabase.reference.child("keyword")
 
         keywordRef.orderByChild("keyword").equalTo(keyword).addListenerForSingleValueEvent(object :
             ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 for (dataSnapshot in snapshot.children) {
                     // 삭제 시간 업데이트
-                    dataSnapshot.ref.child("deletedAt").setValue(System.currentTimeMillis())
+                    dataSnapshot.ref.child("deletedAt").setValue(deletedAt)
                         .addOnSuccessListener {
                             Log.d("KeywordActivity", "Firebase에 키워드 삭제 시간이 성공적으로 업데이트되었습니다.")
                         }
@@ -183,5 +182,10 @@ class KeywordActivity : AppCompatActivity() {
         })
     }
 
+    // 현재 시간을 사람이 읽을 수 있는 형식으로 반환하는 함수
+    private fun getCurrentFormattedTimestamp(): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // 원하는 포맷
+        return dateFormat.format(Date())
+    }
 
 }

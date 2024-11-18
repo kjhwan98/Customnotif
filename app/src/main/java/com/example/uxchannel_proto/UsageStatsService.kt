@@ -61,8 +61,6 @@ class UsageStatsService : Service() {
     private var handler = Handler(Looper.getMainLooper())
     private var isCollectingStats: Boolean = true
     private val notificationChannelId = "UsageStatsServiceChannel"
-    private lateinit var activityRecognitionClient: ActivityRecognitionClient
-    private var currentActivityType: String = "Unknown"
     private lateinit var audioManager: AudioManager
     private val dataTransferReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -74,13 +72,6 @@ class UsageStatsService : Service() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             "com.example.app.ACTION_SEND_DATA_NOW" -> collectAndSendUsageStats()
-            // 다른 인텐트 액션 처리
-            "com.example.app.UPDATE_ACTIVITY" -> {
-                val activityType = intent.getStringExtra("activityType")
-                if (activityType != null) {
-                    currentActivityType = activityType
-                }
-            }
         }
         return START_STICKY // 서비스가 강제 종료된 경우 시스템에 의해 다시 생성
     }
@@ -115,12 +106,8 @@ class UsageStatsService : Service() {
     override fun onCreate() {
         super.onCreate()
         isCollectingStats = true
-        // FirebaseDatabase 인스턴스를 사용하기 전에 setPersistenceEnabled 호출
-        val database = FirebaseDatabase.getInstance().apply {
-            setPersistenceEnabled(true) // 인터넷이 끊겨도 계속 저장되게 만들어줌
-        }
 
-        realtimeDatabase = database // 파이어베이스 인스턴스 초기화
+        realtimeDatabase = FirebaseDatabase.getInstance() // 파이어베이스 인스턴스 초기화
         broadcastServiceStatus(true) // 서비스가 실행중임을 알림
         collectionStartTime = System.currentTimeMillis()
         deviceId = generateUniqueDeviceId() // 고유 디바이스 ID생성
@@ -204,7 +191,7 @@ class UsageStatsService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, notificationChannelId)
             .setContentTitle("Usage Stats Service")
             .setContentText("Collecting usage stats")
-            .setSmallIcon(R.drawable.khu) // 알림 아이콘 생성
+            .setSmallIcon(R.mipmap.ic_launcher) // 알림 아이콘 생성
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

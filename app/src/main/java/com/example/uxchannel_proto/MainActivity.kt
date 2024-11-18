@@ -48,6 +48,9 @@ import java.util.Calendar
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.uxchannel_proto.NotificationListener.Companion.receivedNotificationApps
 import com.google.firebase.database.FirebaseDatabase
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 class MainActivity : AppCompatActivity() {
@@ -62,7 +65,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var realtimeDatabase: FirebaseDatabase
     private lateinit var deviceId: String
     private lateinit var handler: Handler
-    private lateinit var updateTimesRunnable: Runnable
 
     // 토글 버튼 정의(서비스 시작/중지)
     private lateinit var btnToggleFeature: Button
@@ -204,13 +206,6 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(transferDataReceiver, transferDataFilter)
         }
         handler = Handler(Looper.getMainLooper())
-        updateTimesRunnable = object : Runnable {
-            override fun run() {
-                updateServiceTimes()
-                handler.postDelayed(this, 60000) // Update every minute
-            }
-        }
-        handler.postDelayed(updateTimesRunnable, 60000)
 
         // 기능 토글 버튼의 클릭 이벤트 처리
         btnToggleFeature = findViewById(R.id.toggleFeatureButton)
@@ -262,11 +257,9 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun updateButtonColor(isFeatureEnabled: Boolean) {
-        // Set button color according to state
         btnToggleFeature.setBackgroundColor(
             if (isFeatureEnabled) Color.parseColor("#82DE94") else Color.GRAY
         )
-        // Set button text according to state
         btnToggleFeature.text = if (isFeatureEnabled) "Service On" else "Service Off"
     }
 
@@ -362,18 +355,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         startUsageStatsService()
-        updateServiceTimes() // 앱이 활성화될 때 시간을 업데이트
         loadAppListsFromSharedPreferences()
         loadReceivedNotificationAppsFromSharedPreferences()
 
         val lowImportanceCount = getCurrentLowImportanceNotificationCount()
         updateLowImportanceNotificationCount(lowImportanceCount)
 
-        val isServiceEnabled = checkServiceEnabled()
-        if (isServiceEnabled) {
-            // 서비스가 활성화된 경우에만 시간 업데이트를 계속 진행
-            handler.post(updateTimesRunnable)
-        }
     }
 
     private fun getCurrentLowImportanceNotificationCount(): Int {
@@ -389,8 +376,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        updateServiceTimes() // 앱이 중단되기 전에 시간을 업데이트
-        handler.removeCallbacks(updateTimesRunnable) // 핸들러 중단
         val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
         updateButtonColor(isFeatureEnabled)
@@ -428,28 +413,6 @@ class MainActivity : AppCompatActivity() {
         }
         return false
     }
-
-    private fun updateServiceTimes() {
-        val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val editor = sharedPreferences.edit()
-        val currentTimestamp = System.currentTimeMillis()
-        val lastTimestamp = sharedPreferences.getLong(KEY_LAST_TIMESTAMP, currentTimestamp)
-        val elapsedTime = currentTimestamp - lastTimestamp
-
-        val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
-        if (isFeatureEnabled) {
-            val currentOnTime = sharedPreferences.getLong(KEY_SERVICE_ON_TIME, 0)
-            editor.putLong(KEY_SERVICE_ON_TIME, currentOnTime + elapsedTime)
-        } else {
-            val currentOffTime = sharedPreferences.getLong(KEY_SERVICE_OFF_TIME, 0)
-            editor.putLong(KEY_SERVICE_OFF_TIME, currentOffTime + elapsedTime)
-        }
-
-        editor.putLong(KEY_LAST_TIMESTAMP, currentTimestamp)
-        editor.apply()
-
-    }
-
 
     // 중요도별 앱 목록 저장 및 방송 전송
     private fun saveAppListsToSharedPreferences() {
@@ -882,37 +845,40 @@ class MainActivity : AppCompatActivity() {
 
     // 앱 또는 키워드가 중요도에 추가될 때 기록
     private fun logImportanceChange(itemType: String, itemName: String, importanceLevel: String, action: String) {
+        val timestamp = getCurrentFormattedTimestamp()
         val logData = mapOf(
             "deviceId" to deviceId,
             "itemType" to itemType, // "app" 또는 "keyword"
             "itemName" to itemName,
             "importanceLevel" to importanceLevel, // 예: "high", "medium", "low"
             "action" to action, // "added" 또는 "removed"
-            "timestamp" to System.currentTimeMillis()
+            "timestamp" to timestamp
         )
         realtimeDatabase.reference.child("logs").push().setValue(logData)
     }
 
     // 알림 요청 버튼이 눌렸을 때 기록
     private fun logNotificationRequestButtonPress(pendingNotificationCount: Int) {
+        val timestamp = getCurrentFormattedTimestamp()
         val logData = mapOf(
             "deviceId" to deviceId,
             "action" to "notification_request_button_pressed",
             "pendingNotificationCount" to pendingNotificationCount,
-            "timestamp" to System.currentTimeMillis()
+            "timestamp" to timestamp
         )
         realtimeDatabase.reference.child("logs").push().setValue(logData)
     }
 
+    private fun getCurrentFormattedTimestamp(): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // 원하는 포맷
+        return dateFormat.format(Date())
+    }
 
     // 액티비티가 파괴될 때 BroadcastReceiver를 등록 해제
     override fun onDestroy() {
         super.onDestroy()
         saveAppListsToSharedPreferences()
         saveReceivedNotificationAppsToSharedPreferences()
-        // 1. Safely stop any background updates or timers
-        handler.removeCallbacks(updateTimesRunnable)
-        // 2. Unregister the low importance count receiver
         try {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(lowImportanceCountReceiver)
             LocalBroadcastManager.getInstance(this).unregisterReceiver(keywordUpdateReceiver)
@@ -920,15 +886,11 @@ class MainActivity : AppCompatActivity() {
         } catch (e: IllegalArgumentException) {
             Log.w("MainActivity", "Low importance count receiver was not registered.")
         }
-        // 3. Unregister the transfer data receiver
         try {
             unregisterReceiver(transferDataReceiver)
         } catch (e: IllegalArgumentException) {
             Log.w("MainActivity", "Transfer data receiver was not registered.")
         }
-        // 4. Update the service times before completely shutting down the app
-        updateServiceTimes()
-        // 5. Safely stop or disconnect the NotificationListener if applicable
         stopService(Intent(this, NotificationListener::class.java))
         Log.d("MainActivity", "All receivers unregistered, NotificationListener stopped.")
     }
