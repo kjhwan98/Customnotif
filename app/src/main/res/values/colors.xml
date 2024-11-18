@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="sky_blue">#87CEEB</color> <!-- Sky Blue -->
+    <color name="selected_tab">#82DE94</color>
+    <color name="unselected_tab">#F4A3A3</color>
+    <color name="selected_tab_color">#6200EE</color>
+    <color name="unselected_tab_color">#E0E0E0</color>
+    <color name="unselected_text_color">#000000</color>
+    <color name="selected_text_color">#FFFFFF</color>
+</resources>

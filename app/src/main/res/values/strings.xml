@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">CustomNotif</string>
+    <string name="accessibility_service_description">This service monitors for changes in the launcher.</string>
+</resources>

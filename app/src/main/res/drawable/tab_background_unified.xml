@@ -1,0 +1,4 @@
+<!-- res/drawable/tab_background_unified.xml -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@android:color/transparent" />
+</shape>

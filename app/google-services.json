@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "556240920974",
+    "firebase_url": "https://userstudy-971a9-default-rtdb.firebaseio.com",
+    "project_id": "userstudy-971a9",
+    "storage_bucket": "userstudy-971a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:556240920974:android:741530186e10acd3f4c4df",
+        "android_client_info": {
+          "package_name": "com.example.uxchannel_proto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRgoKDwyvxeYeT_sIJcA4FRBkHi7MMzxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
