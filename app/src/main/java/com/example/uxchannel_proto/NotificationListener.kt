@@ -53,6 +53,14 @@ class NotificationListener : NotificationListenerService() {
     private var screenOffTime: Long = 0
     private lateinit var screenOnOffReceiver: BroadcastReceiver
     private var screenOnFlag = false
+    private val featureToggleReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.example.FEATURE_TOGGLED") {
+                val isFeatureEnabled = intent.getBooleanExtra("isFeatureEnabled", false)
+                Log.d("NotificationListener", "Feature toggled: $isFeatureEnabled")
+            }
+        }
+    }
 
     private val highImportanceApps = mutableSetOf<String>() // 중요도 상 앱 목록
     private val mediumImportanceApps = mutableSetOf<String>() // 중요도 중 앱 목록
@@ -63,6 +71,7 @@ class NotificationListener : NotificationListenerService() {
     private val notificationTitles = mutableMapOf<String, String>() // 패키지와 제목을 저장하는 맵
     private val pendingMediumNotifications = mutableMapOf<String, StatusBarNotification>() // 중요도 중 알림 대기 목록
     private val pendingLowNotifications = mutableMapOf<String, StatusBarNotification>() // 중요도 하 알림 대기 목록
+    private val processedNotifications = mutableSetOf<String>() // 처리된 알림 저장
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @RequiresApi(Build.VERSION_CODES.O)
@@ -94,7 +103,8 @@ class NotificationListener : NotificationListenerService() {
             startForegroundService() // 포그라운드 서비스 시작
             notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager // 알림 서비스 접근
             usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-
+            val featureToggleFilter = IntentFilter("com.example.FEATURE_TOGGLED")
+            LocalBroadcastManager.getInstance(this).registerReceiver(featureToggleReceiver, featureToggleFilter)
 
         } catch (e: Exception) {
             Log.e("NotificationListener", "Error during onCreate: ${e.message}")
@@ -295,6 +305,23 @@ class NotificationListener : NotificationListenerService() {
         val key = sbn.key
         val notificationId = sbn.id
         sendDataToFirebase(sbn.id, packageName, title, text, postTime)
+        val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+        val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
+
+        val isGroupSummary = sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0
+        if (isGroupSummary) {
+            Log.d("NotificationListener", "Group summary notification ignored: Key='$key', Package='$packageName'")
+            return // 그룹 요약 알림은 저장하지 않음
+        }
+
+        // 이미 처리된 알림인지 확인
+        if (processedNotifications.contains(key)) {
+            Log.d("NotificationListener", "Duplicate notification detected. Skipping: Key='$key', Title='$title'")
+            return // 이미 처리된 알림은 무시
+        }
+
+        // 알림이라면 Set에 추가
+        processedNotifications.add(key)
 
         notificationTitles[packageName] = title
         saveNotificationTitlesToSharedPreferences()
@@ -302,8 +329,6 @@ class NotificationListener : NotificationListenerService() {
             saveReceivedNotificationAppsToSharedPreferences()
             Log.d("NotificationListener", "New app added and saved: $packageName")
         }
-        val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
-        val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
         Log.d("NotificationListener", "Notification posted: Title='$title', Text='$text', Package='$packageName', FeatureEnabled='$isFeatureEnabled'")
         if (title == "No Title" && text == "No Text") {
             Log.d("NotificationListener", "Ignoring placeholder notification: Title='$title', Text='$text', Package='$packageName'")
@@ -316,6 +341,11 @@ class NotificationListener : NotificationListenerService() {
         Log.d("NotificationListener", "Loaded High Importance Apps: $highImportanceApps")
         Log.d("NotificationListener", "Loaded Medium Importance Apps: $mediumImportanceApps")
         Log.d("NotificationListener", "Loaded Low Importance Apps: $lowImportanceApps")
+
+        if (!isFeatureEnabled) {
+            Log.d("NotificationListener", "Feature is disabled. Ignoring notification.")
+            return // 기능이 비활성화된 경우 알림 무시
+        }
 
         if (isFeatureEnabled && notificationId != 0) {
             when {
@@ -452,8 +482,8 @@ class NotificationListener : NotificationListenerService() {
             val title = sbn.notification.extras.getString(Notification.EXTRA_TITLE) ?: "No Title"
             val text = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: "No Text"
             Log.d("NotificationListener", "Notification removed: ID=$notificationId, Title='$title', Text='$text', Package='$packageName', Reason='$removalReason', Removal Time='$removalTime'")
-
             sendRemovalDataToFirebase(notificationId, packageName, title, text, removalReason, removalTime)
+            processedNotifications.remove(key)
 
         } catch (e: DeadObjectException) {
             Log.e("NotificationListener", "DeadObjectException: ${e.message}")
@@ -629,6 +659,19 @@ class NotificationListener : NotificationListenerService() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
+    private fun unregisterScreenOnOffReceiver() {
+        try {
+            if (::screenOnOffReceiver.isInitialized) {
+                unregisterReceiver(screenOnOffReceiver)
+                Log.d("NotificationListener", "ScreenOnOffReceiver unregistered")
+            }
+        } catch (e: IllegalArgumentException) {
+            Log.e("NotificationListener", "ScreenOnOffReceiver not registered: ${e.message}")
+        } catch (e: Exception) {
+            Log.e("NotificationListener", "Error during unregisterScreenOnOffReceiver: ${e.message}")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try {
@@ -639,9 +682,9 @@ class NotificationListener : NotificationListenerService() {
             stopForeground(Service.STOP_FOREGROUND_REMOVE)
             LocalBroadcastManager.getInstance(this).unregisterReceiver(appImportanceUpdateReceiver)
             LocalBroadcastManager.getInstance(this).unregisterReceiver(lowImportanceReceiver)
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(featureToggleReceiver)
 
-//            unregisterReceiver(appImportanceUpdateReceiver)
-            // No need to unbind the service manually for NotificationListenerService
+            unregisterScreenOnOffReceiver()
         } catch (e: IllegalArgumentException) {
             Log.e("NotificationListener", "Receiver not registered: ${e.message}")
         } catch (e: Exception) {

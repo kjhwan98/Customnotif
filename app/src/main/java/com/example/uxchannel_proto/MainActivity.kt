@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
 
     // 토글 버튼 정의(서비스 시작/중지)
     private lateinit var btnToggleFeature: Button
+    private var isFeatureEnabled: Boolean = false
 
     // 앱 추가/삭제를 위한 RecyclerView 어댑터 정의
     private lateinit var highImportanceAdapter: AppAdapter
@@ -138,9 +139,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        realtimeDatabase = FirebaseDatabase.getInstance().apply {
-            setPersistenceEnabled(true) // 오프라인 시 데이터 로컬 저장 활성화
-        }
+
+        realtimeDatabase = FirebaseDatabase.getInstance()
+
         val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         deviceId = sharedPreferences.getString("deviceId", "UnknownDeviceId") ?: "UnknownDeviceId"
 
@@ -207,11 +208,13 @@ class MainActivity : AppCompatActivity() {
         }
         handler = Handler(Looper.getMainLooper())
 
+        isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
         // 기능 토글 버튼의 클릭 이벤트 처리
         btnToggleFeature = findViewById(R.id.toggleFeatureButton)
         btnToggleFeature.setOnClickListener {
             toggleFeature()
         }
+        updateButtonColor(isFeatureEnabled)
         // Initialize RecyclerView and TextView references for tabs
         val highImportanceText: TextView = findViewById(R.id.highImportanceText)
         val mediumImportanceText: TextView = findViewById(R.id.mediumImportanceText)
@@ -255,12 +258,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun updateButtonColor(isFeatureEnabled: Boolean) {
-        btnToggleFeature.setBackgroundColor(
-            if (isFeatureEnabled) Color.parseColor("#82DE94") else Color.GRAY
-        )
-        btnToggleFeature.text = if (isFeatureEnabled) "Service On" else "Service Off"
+        if (::btnToggleFeature.isInitialized) { // 초기화 여부 확인
+            btnToggleFeature.setBackgroundColor(
+                if (isFeatureEnabled) Color.parseColor("#82DE94") else Color.GRAY
+            )
+            btnToggleFeature.text = if (isFeatureEnabled) "Service On" else "Service Off"
+        } else {
+            Log.e("MainActivity", "btnToggleFeature has not been initialized!")
+        }
     }
 
     // 기능 토글 버튼의 상태를 업데이트
@@ -271,25 +277,28 @@ class MainActivity : AppCompatActivity() {
         val lastTimestamp = sharedPreferences.getLong(KEY_LAST_TIMESTAMP, currentTimestamp)
         val elapsedTime = currentTimestamp - lastTimestamp
 
-        val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
-
-        if (isFeatureEnabled) {
+        if (isFeatureEnabled) { // 클래스 필드 isFeatureEnabled 사용
             val currentOnTime = sharedPreferences.getLong(KEY_SERVICE_ON_TIME, 0)
             editor.putLong(KEY_SERVICE_ON_TIME, currentOnTime + elapsedTime)
             Toast.makeText(this, "기능이 비활성화되었습니다.", Toast.LENGTH_SHORT).show()
-
-            // 기능 비활성화 시 storedNotifications를 비우지 않음
         } else {
             val currentOffTime = sharedPreferences.getLong(KEY_SERVICE_OFF_TIME, 0)
             editor.putLong(KEY_SERVICE_OFF_TIME, currentOffTime + elapsedTime)
             Toast.makeText(this, "기능이 활성화되었습니다.", Toast.LENGTH_SHORT).show()
         }
 
-        editor.putBoolean(KEY_FEATURE_ENABLED, !isFeatureEnabled)
+        // 상태를 반전시키고 SharedPreferences에 저장
+        isFeatureEnabled = !isFeatureEnabled
+        editor.putBoolean(KEY_FEATURE_ENABLED, isFeatureEnabled)
         editor.putLong(KEY_LAST_TIMESTAMP, currentTimestamp)
 
         if (editor.commit()) {
-            updateButtonColor(!isFeatureEnabled)
+            updateButtonColor(isFeatureEnabled) // UI 업데이트
+
+            // 브로드캐스트 전송
+            val intent = Intent("com.example.FEATURE_TOGGLED")
+            intent.putExtra("isFeatureEnabled", isFeatureEnabled)
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
         } else {
             Toast.makeText(this, "설정 저장 실패", Toast.LENGTH_SHORT).show()
         }
@@ -378,7 +387,6 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
-        updateButtonColor(isFeatureEnabled)
         saveAppListsToSharedPreferences()
         saveReceivedNotificationAppsToSharedPreferences()
     }
@@ -817,6 +825,8 @@ class MainActivity : AppCompatActivity() {
 
         if (editor.commit()) {
             Log.d("MainActivity", "Received notification apps saved successfully.")
+            val intent = Intent("com.example.RECEIVED_NOTIFICATION_APPS_UPDATED")
+            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
         } else {
             Log.e("MainActivity", "Failed to save received notification apps.")
         }
