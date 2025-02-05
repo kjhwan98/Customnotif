@@ -53,7 +53,7 @@
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:enabled="true"
             android:exported="true"
-            android:foregroundServiceType="location|dataSync">
+            android:foregroundServiceType="dataSync">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
@@ -61,8 +61,8 @@
         <service
             android:name=".UsageStatsService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location|dataSync"
+            android:exported="true"
+            android:foregroundServiceType="dataSync"
             android:permission="android.permission.BIND_SERVICE">
         </service>
         <receiver android:name=".BootShutdownReceiver"

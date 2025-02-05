@@ -13,9 +13,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -36,17 +33,11 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.AudioManager
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.ActivityRecognition
-import com.google.android.gms.location.ActivityRecognitionClient
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.location.LocationManagerCompat.requestLocationUpdates
-import com.google.android.gms.location.ActivityTransition
-import com.google.android.gms.location.ActivityTransitionRequest
-import com.google.android.gms.location.DetectedActivity
 
 class UsageStatsService : Service() {
     // 변수 선언
@@ -66,14 +57,6 @@ class UsageStatsService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             collectAndSendUsageStats()
         }
-    }
-    // 서비스 시작 명령 처리, 즉시 데이터 전송 인텐트 처리
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
-        when (intent?.action) {
-            "com.example.app.ACTION_SEND_DATA_NOW" -> collectAndSendUsageStats()
-        }
-        return START_STICKY // 서비스가 강제 종료된 경우 시스템에 의해 다시 생성
     }
 
     // 배터리 충전 상태 변경 감지를 위한 BroadcastReceiver
@@ -181,21 +164,24 @@ class UsageStatsService : Service() {
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun startForegroundService() {
         val notificationIntent = Intent(this, MainActivity::class.java)
-
-        val pendingIntentFlags =
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-
-        val pendingIntent =
-            PendingIntent.getActivity(this, 0, notificationIntent, pendingIntentFlags)
+        val pendingIntentFlags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, pendingIntentFlags)
 
         val notification: Notification = NotificationCompat.Builder(this, notificationChannelId)
             .setContentTitle("Usage Stats Service")
-            .setContentText("Collecting usage stats")
-            .setSmallIcon(R.mipmap.ic_launcher) // 알림 아이콘 생성
+            .setContentText("Collecting and analyzing usage stats.")
+            .setSmallIcon(R.mipmap.ic_launcher) // Use a relevant icon
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-        startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+
+        // Use a different unique notification ID (e.g., 2) for this service
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(2, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(2, notification)
+        }
+        Log.d("UsageStatsService", "Foreground service started for UsageStatsService")
     }
 
     // 고유 디바이스 ID 생성
@@ -319,7 +305,7 @@ class UsageStatsService : Service() {
                 val eventTypeString = eventTypeMap[event.eventType] ?: "Unknown"
                 val eventDetails = mutableMapOf<String, Any>(
                     "deviceId" to deviceId,
-                    "packageName" to packageName,
+                    "package_name" to packageName,
                     "timestamp" to formattedTime,
                     "eventType" to eventTypeString,
                     "className" to className,

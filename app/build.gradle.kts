@@ -44,7 +44,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.2.0")
     implementation("com.google.firebase:firebase-firestore-ktx:25.1.1")
     testImplementation("junit:junit:4.13.2")
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.android.gms:play-services-location:21.3.0")

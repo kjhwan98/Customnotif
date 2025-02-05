@@ -30,6 +30,7 @@ import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.util.Log
+import android.util.TypedValue
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -64,7 +65,6 @@ class MainActivity : AppCompatActivity() {
     }
     private lateinit var realtimeDatabase: FirebaseDatabase
     private lateinit var deviceId: String
-    private lateinit var handler: Handler
 
     // 토글 버튼 정의(서비스 시작/중지)
     private lateinit var btnToggleFeature: Button
@@ -86,9 +86,8 @@ class MainActivity : AppCompatActivity() {
                 loadReceivedNotificationAppsFromSharedPreferences()
                 Log.d("MainActivity", "Received notification apps updated and reloaded.")
 
-                // Get the latest low importance count from SharedPreferences
                 val lowImportanceCount = getCurrentLowImportanceNotificationCount()
-                // Update the button with the latest count
+                // 쌓인 알림 갯수 업데이트
                 updateLowImportanceNotificationCount(lowImportanceCount)
             }
         }
@@ -150,8 +149,8 @@ class MainActivity : AppCompatActivity() {
         requestBatteryOptimizationPermission()
         checkNotificationListenerPermission()
         setupRecyclerViews()
-        loadAppListsFromSharedPreferences()
         loadReceivedNotificationAppsFromSharedPreferences()
+        loadAppListsFromSharedPreferences()
         loadKeywordsFromSharedPreferences()
 
         // 키워드 추가 버튼 이벤트 설정
@@ -195,6 +194,8 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(Intent(this, UsageStatsService::class.java))
         }
+//        val importanceUpdateIntent = Intent("com.example.APP_IMPORTANCE_UPDATED")
+//        LocalBroadcastManager.getInstance(this).sendBroadcast(importanceUpdateIntent)
 
         val transferDataFilter = IntentFilter("com.example.app.TRANSFER_DATA")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -206,7 +207,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             registerReceiver(transferDataReceiver, transferDataFilter)
         }
-        handler = Handler(Looper.getMainLooper())
 
         isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
         // 기능 토글 버튼의 클릭 이벤트 처리
@@ -277,28 +277,34 @@ class MainActivity : AppCompatActivity() {
         val lastTimestamp = sharedPreferences.getLong(KEY_LAST_TIMESTAMP, currentTimestamp)
         val elapsedTime = currentTimestamp - lastTimestamp
 
-        if (isFeatureEnabled) { // 클래스 필드 isFeatureEnabled 사용
+        val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
+
+        if (isFeatureEnabled) {
             val currentOnTime = sharedPreferences.getLong(KEY_SERVICE_ON_TIME, 0)
             editor.putLong(KEY_SERVICE_ON_TIME, currentOnTime + elapsedTime)
             Toast.makeText(this, "기능이 비활성화되었습니다.", Toast.LENGTH_SHORT).show()
+
+            // 기능 비활성화 시 storedNotifications를 비우지 않음
         } else {
             val currentOffTime = sharedPreferences.getLong(KEY_SERVICE_OFF_TIME, 0)
             editor.putLong(KEY_SERVICE_OFF_TIME, currentOffTime + elapsedTime)
             Toast.makeText(this, "기능이 활성화되었습니다.", Toast.LENGTH_SHORT).show()
         }
 
-        // 상태를 반전시키고 SharedPreferences에 저장
-        isFeatureEnabled = !isFeatureEnabled
-        editor.putBoolean(KEY_FEATURE_ENABLED, isFeatureEnabled)
+        editor.putBoolean(KEY_FEATURE_ENABLED, !isFeatureEnabled)
         editor.putLong(KEY_LAST_TIMESTAMP, currentTimestamp)
 
         if (editor.commit()) {
-            updateButtonColor(isFeatureEnabled) // UI 업데이트
+            updateButtonColor(!isFeatureEnabled)
 
-            // 브로드캐스트 전송
-            val intent = Intent("com.example.FEATURE_TOGGLED")
-            intent.putExtra("isFeatureEnabled", isFeatureEnabled)
-            LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+            // Firebase 로그 전송 추가
+            val timestamp = getCurrentFormattedTimestamp()
+            val logData = mapOf(
+                "deviceId" to deviceId,
+                "action" to if (!isFeatureEnabled) "service_on" else "service_off",
+                "timestamp" to timestamp
+            )
+            realtimeDatabase.reference.child("logs").push().setValue(logData)
         } else {
             Toast.makeText(this, "설정 저장 실패", Toast.LENGTH_SHORT).show()
         }
@@ -317,6 +323,7 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
     }
+
 
     private fun permissionGranted(): Boolean {
         // 알림 접근 권한이 부여되었는지 확인
@@ -377,16 +384,11 @@ class MainActivity : AppCompatActivity() {
         return sharedPreferences.getInt("lowImportanceCount", 0)
     }
 
-    private fun checkServiceEnabled(): Boolean {
-        // 서비스 활성화 여부를 SharedPreferences에서 가져옴
-        val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
-        return sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
-    }
-
     override fun onPause() {
         super.onPause()
         val sharedPreferences = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
         val isFeatureEnabled = sharedPreferences.getBoolean(KEY_FEATURE_ENABLED, false)
+        updateButtonColor(isFeatureEnabled)
         saveAppListsToSharedPreferences()
         saveReceivedNotificationAppsToSharedPreferences()
     }
@@ -561,6 +563,7 @@ class MainActivity : AppCompatActivity() {
         adapter = AppAdapter(appList, this, onAppDeleted) { appName, packageName ->
             showAppPickerDialog { selectedName, selectedPackage ->
                 if (selectedPackage.isEmpty()) {
+                    // Handling for keyword addition
                     if (isKeywordInAnotherImportanceLevel(selectedName)) {
                         Toast.makeText(this, "키워드가 이미 다른 레벨에 추가되었습니다.", Toast.LENGTH_SHORT).show()
                     } else {
@@ -568,9 +571,10 @@ class MainActivity : AppCompatActivity() {
                         adapter.addApp(selectedName to "")
                         saveKeywordToLevel(selectedName, recyclerViewId)
                         saveKeywordsToSharedPreferences()
-                        logImportanceChange("keyword", selectedName, getImportanceLevelByRecyclerViewId(recyclerViewId), "added") // 로그 추가
+                        logImportanceChange("keyword", selectedName, getImportanceLevelByRecyclerViewId(recyclerViewId), "added") // Log keyword addition
                     }
                 } else {
+                    // Handling for app addition
                     if (isAppInAnotherImportanceLevel(selectedPackage)) {
                         Toast.makeText(this, "앱이 이미 다른 레벨에 추가되었습니다.", Toast.LENGTH_SHORT).show()
                     } else {
@@ -579,7 +583,7 @@ class MainActivity : AppCompatActivity() {
                         receivedNotificationApps.remove(selectedPackage)
                         saveAppListsToSharedPreferences()
                         saveReceivedNotificationAppsToSharedPreferences()
-                        logImportanceChange("app", selectedName, getImportanceLevelByRecyclerViewId(recyclerViewId), "added") // 로그 추가
+                        logImportanceChange("app", selectedName, getImportanceLevelByRecyclerViewId(recyclerViewId), "added", selectedPackage) // Log app addition with name and package
                     }
                 }
             }
@@ -592,22 +596,25 @@ class MainActivity : AppCompatActivity() {
             R.id.recyclerView_low -> lowImportanceAdapter = adapter
         }
 
-        // 앱 삭제 시 처리
+        // Handling app deletion
         adapter.onAppDeleted = { packageName ->
             Log.d("MainActivity", "onAppDeleted callback triggered with package: $packageName")
 
-            // packageName이 키워드 리스트에 있는지 확인
+            // Find app name associated with the package
+            val appName = adapter.getAppList().find { it.second == packageName }?.first ?: ""
+
             if (highImportanceTexts.contains(packageName) || mediumImportanceTexts.contains(packageName) || lowImportanceTexts.contains(packageName)) {
+                // Handle keyword deletion
                 Log.d("MainActivity", "Removing keyword from specific level: $packageName")
                 removeKeywordFromLevel(packageName, recyclerViewId)
                 saveKeywordsToSharedPreferences()
-                logImportanceChange("keyword", packageName, getImportanceLevelByRecyclerViewId(recyclerViewId), "removed") // 로그 추가
+                logImportanceChange("keyword", packageName, getImportanceLevelByRecyclerViewId(recyclerViewId), "removed") // Log keyword removal
             } else {
-                // 일반 앱 삭제 처리
+                // Handle app deletion
                 addedApps.remove(packageName)
                 receivedNotificationApps.add(packageName)
                 saveReceivedNotificationAppsToSharedPreferences()
-                logImportanceChange("app", packageName, getImportanceLevelByRecyclerViewId(recyclerViewId), "removed") // 로그 추가
+                logImportanceChange("app", appName, getImportanceLevelByRecyclerViewId(recyclerViewId), "removed", packageName) // Log app removal with name and package
             }
             saveAppListsToSharedPreferences()
         }
@@ -774,8 +781,11 @@ class MainActivity : AppCompatActivity() {
             val color = if (combinedPackages[index].isEmpty()) {
                 ContextCompat.getColor(this, R.color.sky_blue) // Sky blue for keywords
             } else {
-                ContextCompat.getColor(this, R.color.white) // White for apps
+                val typedValue = TypedValue()
+                theme.resolveAttribute(android.R.attr.textColorPrimary, typedValue, true)
+                ContextCompat.getColor(this, typedValue.resourceId) // Adaptive primary text color for apps
             }
+
             spannable.setSpan(
                 ForegroundColorSpan(color),
                 0,
@@ -837,7 +847,6 @@ class MainActivity : AppCompatActivity() {
         val sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         receivedNotificationApps = sharedPreferences.getStringSet("receivedNotificationApps", emptySet())?.toMutableSet()
             ?: mutableSetOf()
-
         Log.d("MainActivity", "Loaded receivedNotificationApps: $receivedNotificationApps")
 
         filterOutExistingImportanceApps()
@@ -854,12 +863,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 앱 또는 키워드가 중요도에 추가될 때 기록
-    private fun logImportanceChange(itemType: String, itemName: String, importanceLevel: String, action: String) {
+    private fun logImportanceChange(itemType: String, itemName: String, importanceLevel: String, action: String, packageName: String = "") {
         val timestamp = getCurrentFormattedTimestamp()
         val logData = mapOf(
             "deviceId" to deviceId,
             "itemType" to itemType, // "app" 또는 "keyword"
-            "itemName" to itemName,
+            "itemName" to itemName, // 앱 이름
+            "packageName" to packageName, // 패키지명
             "importanceLevel" to importanceLevel, // 예: "high", "medium", "low"
             "action" to action, // "added" 또는 "removed"
             "timestamp" to timestamp
@@ -878,7 +888,6 @@ class MainActivity : AppCompatActivity() {
         )
         realtimeDatabase.reference.child("logs").push().setValue(logData)
     }
-
     private fun getCurrentFormattedTimestamp(): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // 원하는 포맷
         return dateFormat.format(Date())
