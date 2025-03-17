@@ -34,7 +34,7 @@ RQ1: 사용자 정의 알림 수신 모드는 사용자의 스마트폰 사용 �
 <br/> 
 
 ### 알림커스터마이징 앱 개발
-<img src=https://github.com/user-attachments/assets/a26aba14-a525-476b-87f6-3ec868768c56/>
+<br/><img src=https://github.com/user-attachments/assets/a26aba14-a525-476b-87f6-3ec868768c56/>
 <br/> 
 <br/> Kotlin(버전 1.9)을 이용한 Android 13 기반의 Android 모바일 애플리케이션을 개발
 <br/> 트리거된 후 원본 알림을 일시 중단하는 것은 불가능
@@ -50,7 +50,7 @@ RQ1: 사용자 정의 알림 수신 모드는 사용자의 스마트폰 사용 �
 <br/> 
 
 ### 연구 Process
-<img src=https://github.com/user-attachments/assets/07874421-b9c3-4196-9d9f-cf5d548f2734/>
+<br/><img src=https://github.com/user-attachments/assets/07874421-b9c3-4196-9d9f-cf5d548f2734/>
 <br/> 
 <br/> 
 
@@ -71,7 +71,7 @@ RQ1: 사용자 정의 알림 수신 모드는 사용자의 스마트폰 사용 �
 <br/> 
 
 #### 알림 수신모드 설정
-<img src=https://github.com/user-attachments/assets/4510943f-263b-483b-9169-56d64ed83e9c/>
+<br/><img src=https://github.com/user-attachments/assets/4510943f-263b-483b-9169-56d64ed83e9c/>
 <br/> 개인적인 선호에 따라 각 애플리케이션을 세 가지 알림 수신 모드로 다양하게 설정
 <br/> Ex) 인스타그램: 즉시 알림(N=11), 사용 중 알림(N=2), 요청 시 알림(N=4)
 <br/> <img src=https://github.com/user-attachments/assets/bbb651da-e5cf-4960-bc77-2bf476256231/>
@@ -96,7 +96,7 @@ Immediate
 <br/> 
 
 #### 멘탈지수 변화
-<img src=https://github.com/user-attachments/assets/ce0b55e6-fc9c-4701-a119-30cf30ed4bef/>
+<br/><img src=https://github.com/user-attachments/assets/ce0b55e6-fc9c-4701-a119-30cf30ed4bef/>
 <br/>MPA (모바일 중독): 4.70  3.97
 <br/>IFO (정보 과부화): 4.17  3.09
 <br/>CO (의사소통 과부화): 4.26  2.91
