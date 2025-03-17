@@ -1,6 +1,6 @@
 ## 목표: 사용자가 앱 별로 알림 수신 모드를 직접 설정할 수 있는 앱 개발, 사용자가 알림 수신 모드를 설정하는 이유와 개인화된 알림 수신 모드의 효과를 조사
 #### 작동 영상
-<br/> <img src= https://github.com/user-attachments/assets/ef05f464-013d-419f-af11-3118ff56982f/>
+<br/> <img src= https://github.com/user-attachments/assets/db16cf75-d4a0-453f-b474-880609c2ea4b>
 
 #### Methodology: 알림 수신 모드 정의
 <br/> 즉시 받기: 기존과 동일하게, 스마트폰 알림이 발생하면 사용자에게 해당 알림을 바로 전송
